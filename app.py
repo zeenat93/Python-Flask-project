@@ -1,8 +1,11 @@
 from flask import Flask , render_template, request, redirect,jsonify, url_for, session, flash, make_response
+import os
 from db import connection
 from functools import wraps
 app = Flask (__name__)
-app.secret_key ='your key'
+app.secret_key = os.environ.get("SECRET_KEY") or "dev-only-key"
+if app.secret_key == "dev-only-key":
+    print("WARNING: development SECRET_KEY in use, set SECRET_KEY before deploying")
 def no_cache(view):
     @wraps(view)
     def decorated_view(*args, **kwargs):
@@ -246,8 +249,10 @@ def edit_dr(doctor_id):
     conn.close()
     flash("Profile updated successfully!")
     return render_template("dr_profile.html", doctor_info=doctor_info , patients_all=patients_data)
-@app.route("/register_new_patient" , methods=['GET', 'POST'])
+@app.route("/register_new_patient" , methods=['POST'])
 def patient_registers():
+    if 'doctor_id' not in session:
+        return redirect(url_for('login'))
     if request.method == 'POST':
         pid = request.form["pid"]
         fname = request.form["fname"]
@@ -265,7 +270,9 @@ def patient_registers():
         cursor.execute(query_security_id,(pid,))
         pid_info= cursor.fetchone()
         if pid_info:
-            flash("this security ID is already exsited")
+            cursor.close()
+            conn.close()
+            flash("this security ID is already exsited","danger")
             return redirect (url_for('dr_profile'))
         else: 
             patient_insert = "insert into patient (patient_securitynum ,patient_fname, patient_lname,gender, patient_address, patient_phone, patient_email,patient_allergies, patient_illness,patient_treatment)VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
@@ -273,10 +280,12 @@ def patient_registers():
             conn.commit()
             cursor.close()
             conn.close()
-            flash("New patient registered successufully")
+            flash("New patient registered successufully","success")
             return redirect(url_for('dr_profile'))
-@app.route("/add_appointment", methods=['POST','GET'])
+@app.route("/add_appointment", methods=['POST'])
 def appointment_record(): 
+    if 'doctor_id' not in session:
+        return redirect(url_for('login'))
     if request.method == 'POST':
         patient_sid= request.form['sid']
         doctor_username= session.get('username')
@@ -340,7 +349,7 @@ def add_prescription():
                 return redirect(url_for('login'))
             newdid= did_find['doctor_id']
             prescription_query="insert into prescription(patient_id,doctor_id,prescription_date,medicine,strength,instructions,duration)values(%s,%s,%s,%s,%s,%s,%s)"
-            cursor.execute(prescription_query,(newpid,newdid,pres_date,pres_medicine,pres_strength,pres_duration,pres_instructions))
+            cursor.execute(prescription_query,(newpid,newdid,pres_date,pres_medicine,pres_strength,pres_instructions,pres_duration))
             conn.commit()
             flash("prescription has successfully added")
             return redirect(url_for('dr_profile'))

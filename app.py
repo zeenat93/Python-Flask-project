@@ -16,6 +16,10 @@ def no_cache(view):
         response.headers['Expires'] = '0'
         return response
     return decorated_view
+def show_error(e):
+    if os.environ.get("RENDER"):                          # Render  (live)
+        return "Something went wrong, please try again"
+    return f"Error: {e}"                                  # my computer (local)
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -23,6 +27,8 @@ def home():
 def patient_login():
     if request.method== 'POST':
         p_num=request.form['patient_snum']
+        conn=None
+        cursor=None
         try:
             conn=connection()
             cursor=conn.cursor(dictionary=True)
@@ -39,10 +45,13 @@ def patient_login():
                 flash("Invalid security key")
                 return render_template("patient.html")
         except Exception as e:
-            flash(f"this is the error {e}")
+            app.logger.exception("patient_login failed")
+            flash(show_error(e), "danger")
         finally :
-            cursor.close()
-            conn.close()
+            if cursor: 
+                cursor.close()
+            if conn: 
+                conn.close()
 
     return render_template("patient.html")
 @app.route('/p_logout')
